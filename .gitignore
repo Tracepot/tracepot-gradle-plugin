@@ -1,5 +1,15 @@
+*.iml
+
+.idea/
+*.ipr
+*.iws
+out/
+.idea_modules/
+
 .gradle
 build/
 
-# Ignore Gradle GUI config
 gradle-app.setting
+
+local.properties
+
