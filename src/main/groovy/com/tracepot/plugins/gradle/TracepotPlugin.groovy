@@ -1,5 +1,6 @@
 package com.tracepot.plugins.gradle
 
+import com.android.build.gradle.api.ApplicationVariant
 import org.apache.http.HttpHost
 import org.apache.http.HttpResponse
 import org.apache.http.HttpStatus
@@ -18,53 +19,54 @@ import org.gradle.api.Project
 
 class TracepotPlugin implements Plugin<Project>
 {
+    private String package_name
+
     @Override
-    void apply(Project project) {
-
-        // create an extension where the apiKey and such settings reside
-        def extension = project.extensions.create("tracepotConfig", TracepotExtension, project)
-
+    void apply(Project project)
+    {
         project.configure(project) {
             if (!it.hasProperty("android")) {
                 return
             }
 
-            tasks.whenTaskAdded { task ->
+            def extension = project.extensions.create("tracepotConfig", TracepotExtension)
 
-                project.("android").applicationVariants.all { variant ->
+            project.("android").applicationVariants.all { ApplicationVariant variant ->
 
-                    // locate packageRelease and packageDebug tasks
-                    def expectingTask = "package${variant.name.capitalize()}".toString()
-                    if (expectingTask.equals(task.name)) {
+                def variantName = variant.name
 
-                        def variantName = variant.name
-
-                        // create new task with name such as tracepotRelease and tracepotDebug
-                        def newTaskName = "tracepot${variantName.capitalize()}"
-
-                        project.task(newTaskName) << {
-
-                            assertValidApiKey  extension
-                            assertValidGroupId extension
-
-                            if (variant.buildType.isMinifyEnabled()) {
-                                String proguardMappingFilename = variant.getMappingfile().toString()
-
-                                project.logger.debug("Using proguard mapping file at ${proguardMappingFilename}")
-                                uploadMappingFile(extension, proguardMappingFilename)
-                                project.logger.info("Successfully uploaded mapping file")
-                            }
-
-                            println ""
-                            println "Successfully uploaded to Tracepot"
-                        }
-
-                        project.(newTaskName.toString()).dependsOn(expectingTask)
-                        project.(newTaskName.toString()).group = "Tracepot"
-                        project.(newTaskName.toString()).description = "Uploads an application info to Tracepot"
-                    }
+                // check if this variant is enabled
+                if (!extension.enabledFor.contains(variantName)) {
+                    return;
                 }
+
+                package_name = variant.applicationId
+
+                printtln package_name
+
+                def newTaskName = "tracepot${variantName.capitalize()}"
+
+                def newTask = project.task(newTaskName) << {
+                    assertValidApiKey  extension
+                    assertValidGroupId extension
+
+                    if (variant.buildType.isMinifyEnabled()) {
+                        String proguardMappingFilename = variant.getMappingFile().toString()
+
+                        println "Using proguard mapping file at ${proguardMappingFilename}"
+                        uploadMappingFile(extension, proguardMappingFilename)
+                        println "Successfully uploaded mapping file"
+                    }
+
+                    //def manifest = new XmlSlurper().parse(file("AndroidManifest.xml"))
+
+                }
+
+                newTask.dependsOn variant.dex
+                variant.assemble.dependsOn newTaskName
+
             }
+
         }
     }
 
@@ -104,7 +106,7 @@ class TracepotPlugin implements Plugin<Project>
      * @param extension
      * @param mappingFilename
      */
-    private static void uploadMappingFile(TracepotExtension extension, String mappingFilename)
+    private void uploadMappingFile(TracepotExtension extension, String mappingFilename)
     {
         String apiEndpoint = extension.getApiEndpoint()
         String url = "${apiEndpoint}/api/upload-mapping"
@@ -114,6 +116,23 @@ class TracepotPlugin implements Plugin<Project>
         entity.addPart('mapping_file', new FileBody(new File(mappingFilename)))
 
         post(url, entity)
+    }
+
+    /**
+     * Build MultipartEntity with common values
+     *
+     * @param extension
+     * @return MultipartEntity
+     */
+    private MultipartEntity buildEntity(TracepotExtension extension)
+    {
+        MultipartEntity entity = new MultipartEntity()
+
+        entity.addPart('api_key',      new StringBody(extension.getApiKey()))
+        entity.addPart('group_id',     new StringBody(extension.getGroupId()))
+        entity.addPart('package_name', new StringBody(package_name))
+
+        return entity
     }
 
     /**
@@ -165,25 +184,10 @@ class TracepotPlugin implements Plugin<Project>
 
         int code = response.getStatusLine().getStatusCode();
 
-        if (code != HttpStatus.SC_OK) {
+        if (code != HttpStatus.SC_MOVED_TEMPORARILY) {
             throw new GradleException("API request failed with code " + code)
         }
     }
 
-    /**
-     * Build MultipartEntity with common values
-     *
-     * @param extension
-     * @return MultipartEntity
-     */
-    private static MultipartEntity buildEntity(TracepotExtension extension)
-    {
-        MultipartEntity entity = new MultipartEntity()
-
-        entity.addPart('api_key',  new StringBody(extension.getApiKey()))
-        entity.addPart('group_id', new StringBody(extension.getGroupId()))
-
-        return entity
-    }
 
 }

@@ -1,17 +1,8 @@
-buildscript {
-    repositories {
-        jcenter()
-    }
-}
-
 apply plugin: 'groovy'
 apply plugin: 'maven'
 
 group = 'com.tracepot.plugins.gradle'
 version = '1.0'
-
-sourceCompatibility = JavaVersion.VERSION_1_6
-targetCompatibility = JavaVersion.VERSION_1_6
 
 dependencies {
     repositories {
@@ -20,9 +11,9 @@ dependencies {
 
     compile gradleApi()
     compile localGroovy()
-    compile 'com.android.tools.build:gradle:1.0.0'
     compile 'org.apache.httpcomponents:httpmime:4.2.5'
     compile 'commons-io:commons-io:1.3.2'
+    compile 'com.android.tools.build:gradle:1.0.0'
 }
 
 configurations {
@@ -32,11 +23,11 @@ configurations {
 uploadArchives {
     repositories {
         mavenDeployer {
-            repository(url: uri('repo'))
+            repository(url: "file://localhost/Users/majlo/Temp/repo/")
 
             pom.project {
                 name 'Tracepot Plugin for Gradle'
-                description 'Upload proguard mapping files to Tracepot.'
+                description 'Upload application info to Tracepot.'
                 url 'http://www.tracepot.com'
                 inceptionYear '2014'
 
