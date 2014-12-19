@@ -1,5 +1,4 @@
 package com.tracepot.plugins.gradle
-
 import com.android.build.gradle.api.ApplicationVariant
 import org.apache.http.HttpHost
 import org.apache.http.HttpResponse
@@ -42,8 +41,6 @@ class TracepotPlugin implements Plugin<Project>
 
                 package_name = variant.applicationId
 
-                printtln package_name
-
                 def newTaskName = "tracepot${variantName.capitalize()}"
 
                 def newTask = project.task(newTaskName) << {
@@ -58,14 +55,28 @@ class TracepotPlugin implements Plugin<Project>
                         println "Successfully uploaded mapping file"
                     }
 
-                    //def manifest = new XmlSlurper().parse(file("AndroidManifest.xml"))
+                    def manifestFile = variant.outputs.processManifest.manifestOutputFile
+                    def manifest     = new XmlSlurper().parse(manifestFile.get(0))
 
+                    String icon = manifest.application.'@android:icon'   //@drawable/ic_launcher
+                    String name = manifest.application.'@android:label'  //@string/app_name  || app name
+
+                    // /Users/majlo/AndroidstudioProjects/TracepotSample/app/build/intermediates/res/free/debug
+                    String resDir = variant.outputs.processResources.resDir.get(0)
+
+                    println icon
+                    println name
+                    println resDir
+
+                    println findIcon(icon, resDir)
+                    println findName(name, resDir)
                 }
 
                 newTask.dependsOn variant.dex
                 variant.assemble.dependsOn newTaskName
 
             }
+
 
         }
     }
@@ -98,6 +109,60 @@ class TracepotPlugin implements Plugin<Project>
         if (!groupId.matches("([0-9a-f]{8})")) {
             throw new GradleException("Your Tracepot groupId does not have correct format")
         }
+    }
+
+    private static String findIcon(String icon, String resDir)
+    {
+        def baseName = icon.split("/")[1]
+
+        println baseName
+
+        File f = new File(resDir, "drawable-xxhdpi-v4/${baseName}.png")
+        if (f.exists()) {
+            return f.absolutePath.toString()
+        }
+
+        f = new File(resDir, "drawable-xhdpi-v4/${baseName}.png")
+        if (f.exists()) {
+            return f.absolutePath.toString()
+        }
+
+        f = new File(resDir, "drawable-hdpi-v4/${baseName}.png")
+        if (f.exists()) {
+            return f.absolutePath.toString()
+        }
+
+        f = new File(resDir, "drawable-mdpi-v4/${baseName}.png")
+        if (f.exists()) {
+            return f.absolutePath.toString()
+        }
+
+        f = new File(resDir, "drawable/${baseName}.png")
+        if (f.exists()) {
+            return f.absolutePath.toString()
+        }
+
+        return ""
+    }
+
+    private static String findName(String name, String resDir)
+    {
+        if (!name.startsWith("@string")) {
+            return name
+        }
+
+        def baseName = name.split("/")[1]
+
+        println baseName
+
+        File f = new File(resDir, "values/values.xml")
+        if (!f.exists()) {
+            return ""
+        }
+
+        def values = new XmlSlurper().parse(f)
+
+        return values.string.findAll{ it.@name.equals(baseName) }.text()
     }
 
     /**
