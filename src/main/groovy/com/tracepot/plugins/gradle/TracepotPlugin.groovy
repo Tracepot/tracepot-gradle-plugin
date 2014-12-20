@@ -13,6 +13,7 @@ import org.apache.http.entity.mime.MultipartEntity
 import org.apache.http.entity.mime.content.FileBody
 import org.apache.http.entity.mime.content.StringBody
 import org.apache.http.impl.client.DefaultHttpClient
+import org.apache.http.util.EntityUtils
 import org.gradle.api.GradleException
 import org.gradle.api.Plugin
 import org.gradle.api.Project
@@ -52,7 +53,7 @@ class TracepotPlugin implements Plugin<Project>
 
                         mappingFilename = variant.getMappingFile().toString()
 
-                        println "  Using mapping ${mappingFilename}"
+                        project.logger.info("Using mapping ${mappingFilename}")
                     }
 
                     def manifestFile = variant.outputs.processManifest.manifestOutputFile
@@ -65,12 +66,13 @@ class TracepotPlugin implements Plugin<Project>
                     project.logger.debug("Resource dir ${resDir}")
 
                     def iconFilename = findIcon(iconRes, resDir, project.logger)
-                    println "  Using icon    ${iconFilename}"
+                    project.logger.info("Using icon ${iconFilename}")
 
                     def appName = findName(nameRes, resDir, project.logger)
-                    println "  Using name    ${appName}"
+                    project.logger.info("Using name ${appName}")
 
-                    upload(extension, mappingFilename, iconFilename, appName, packageName)
+                    upload(extension, mappingFilename, iconFilename, appName, packageName, variant.versionCode)
+                    println "  Successfully uploaded to Tracepot"
                 }
 
                 newTask.dependsOn variant.dex
@@ -178,9 +180,10 @@ class TracepotPlugin implements Plugin<Project>
      * @param appName
      * @param iconFilename
      * @param packageName
+     * @param versionCode
      */
     private static void upload(TracepotExtension extension, String mappingFilename, String iconFilename,
-                        String appName, String packageName)
+                        String appName, String packageName, int versionCode)
     {
         String url = "${extension.getApiEndpoint()}/api/1/app"
 
@@ -190,6 +193,7 @@ class TracepotPlugin implements Plugin<Project>
 
         entity.addPart('api_group key', new StringBody(extension.getApiGroupKey()))
         entity.addPart('package_name',  new StringBody(packageName))
+        entity.addPart('version_code',  new StringBody(versionCode.toString()))
         entity.addPart('app_name',      new StringBody(appName))
 
         if (!mappingFilename.empty) {
@@ -201,11 +205,15 @@ class TracepotPlugin implements Plugin<Project>
         }
 
         post.addHeader("User-Agent", "Tracepot Gradle Plugin")
+        post.addHeader("X-Requested-With", "XMLHttpRequest")
         post.setEntity(entity)
 
         HttpResponse response = httpClient.execute(post)
 
-        int code = response.getStatusLine().getStatusCode();
+        String json = EntityUtils.toString(response.getEntity())
+        int    code = response.getStatusLine().getStatusCode();
+
+        println "  ${json}"
 
         if (code != HttpStatus.SC_OK) {
             throw new GradleException("API request failed with code " + code)
