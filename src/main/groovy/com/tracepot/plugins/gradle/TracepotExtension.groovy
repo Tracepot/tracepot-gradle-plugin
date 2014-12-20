@@ -2,25 +2,16 @@ package com.tracepot.plugins.gradle
 
 class TracepotExtension {
 
-    private String   apiKey
-    private String   groupId
-    private String   apiEndpoint = "http://api.tracepot.com:1234"
+    private String   apiGroupKey
+    private String   apiEndpoint = "https://api.tracepot.com"
     private String[] enabledFor
 
-    String getApiKey() {
-        return apiKey
+    String getApiGroupKey() {
+        return apiGroupKey
     }
 
-    void setApiKey(String apiKey) {
-        this.apiKey = apiKey
-    }
-
-    String getGroupId() {
-        return groupId
-    }
-
-    void setGroupId(String groupId) {
-        this.groupId = groupId
+    void setApiGroupKey(String apiGroupKey) {
+        this.apiGroupKey = apiGroupKey
     }
 
     String getApiEndpoint() {

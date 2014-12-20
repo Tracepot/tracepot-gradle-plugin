@@ -23,7 +23,7 @@ configurations {
 uploadArchives {
     repositories {
         mavenDeployer {
-            repository(url: "file://localhost/Users/majlo/Temp/repo/")
+            repository(url: "$repos")
 
             pom.project {
                 name 'Tracepot Plugin for Gradle'

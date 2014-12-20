@@ -1,4 +1,5 @@
 package com.tracepot.plugins.gradle
+
 import com.android.build.gradle.api.ApplicationVariant
 import org.apache.http.HttpHost
 import org.apache.http.HttpResponse
@@ -15,11 +16,10 @@ import org.apache.http.impl.client.DefaultHttpClient
 import org.gradle.api.GradleException
 import org.gradle.api.Plugin
 import org.gradle.api.Project
+import org.gradle.api.logging.Logger
 
 class TracepotPlugin implements Plugin<Project>
 {
-    private String package_name
-
     @Override
     void apply(Project project)
     {
@@ -39,45 +39,43 @@ class TracepotPlugin implements Plugin<Project>
                     return;
                 }
 
-                package_name = variant.applicationId
-
+                def packageName = variant.applicationId
                 def newTaskName = "tracepot${variantName.capitalize()}"
 
                 def newTask = project.task(newTaskName) << {
                     assertValidApiKey  extension
-                    assertValidGroupId extension
+
+                    def mappingFilename = ""
 
                     if (variant.buildType.isMinifyEnabled()) {
-                        String proguardMappingFilename = variant.getMappingFile().toString()
+                        project.logger.debug("Minify is enabled")
 
-                        println "Using proguard mapping file at ${proguardMappingFilename}"
-                        uploadMappingFile(extension, proguardMappingFilename)
-                        println "Successfully uploaded mapping file"
+                        mappingFilename = variant.getMappingFile().toString()
+
+                        println "  Using mapping ${mappingFilename}"
                     }
 
                     def manifestFile = variant.outputs.processManifest.manifestOutputFile
                     def manifest     = new XmlSlurper().parse(manifestFile.get(0))
 
-                    String icon = manifest.application.'@android:icon'   //@drawable/ic_launcher
-                    String name = manifest.application.'@android:label'  //@string/app_name  || app name
+                    String iconRes = manifest.application.'@android:icon'   //@drawable/ic_launcher
+                    String nameRes = manifest.application.'@android:label'  //@string/app_name  || app name
+                    String resDir  = variant.outputs.processResources.resDir.get(0)
 
-                    // /Users/majlo/AndroidstudioProjects/TracepotSample/app/build/intermediates/res/free/debug
-                    String resDir = variant.outputs.processResources.resDir.get(0)
+                    project.logger.debug("Resource dir ${resDir}")
 
-                    println icon
-                    println name
-                    println resDir
+                    def iconFilename = findIcon(iconRes, resDir, project.logger)
+                    println "  Using icon    ${iconFilename}"
 
-                    println findIcon(icon, resDir)
-                    println findName(name, resDir)
+                    def appName = findName(nameRes, resDir, project.logger)
+                    println "  Using name    ${appName}"
+
+                    upload(extension, mappingFilename, iconFilename, appName, packageName)
                 }
 
                 newTask.dependsOn variant.dex
                 variant.assemble.dependsOn newTaskName
-
             }
-
-
         }
     }
 
@@ -88,64 +86,70 @@ class TracepotPlugin implements Plugin<Project>
      */
     private static void assertValidApiKey(extension)
     {
-        if (extension.getApiKey() == null || extension.getApiKey().equals("")) {
-            throw new GradleException("Please configure your Tracepot apiKey before building")
+        if (extension.getApiGroupKey() == null || extension.getApiGroupKey().equals("")) {
+            throw new GradleException("Please configure your Tracepot apiGroupKey before building")
         }
     }
 
     /**
-     * Make sure GroupId is configured and valid.
+     * Looking for icon file
      *
-     * @param extension
+     * @param icon
+     * @param resDir
+     * @return
      */
-    private static void assertValidGroupId(extension)
-    {
-        String groupId = extension.getGroupId()
-
-        if (groupId == null || groupId.equals("")) {
-            throw new GradleException("Please configure your Tracepot groupId for application")
-        }
-
-        if (!groupId.matches("([0-9a-f]{8})")) {
-            throw new GradleException("Your Tracepot groupId does not have correct format")
-        }
-    }
-
-    private static String findIcon(String icon, String resDir)
+    private static String findIcon(String icon, String resDir, Logger logger)
     {
         def baseName = icon.split("/")[1]
+        def bestQual = ""
+        def currQual = 999
+        def quality  = "mdpi hdpi xhdpi xxhdpi xxxhdpi".split()
 
-        println baseName
+        logger.debug("Icon drawable ${baseName}")
 
-        File f = new File(resDir, "drawable-xxhdpi-v4/${baseName}.png")
-        if (f.exists()) {
-            return f.absolutePath.toString()
+        File dir = new File(resDir)
+
+        dir.listFiles().each { File file ->
+
+            // get last part of the path
+            def dirName = (file.absolutePath.split(File.separator)).last()
+
+            // we want only drawables
+            if (!dirName.startsWith("drawable")) {
+                return
+            }
+
+            // look for the resource in each drawable dir
+            File f = new File(file, "${baseName}.png")
+            if (!f.exists()) {
+                return
+            }
+
+            // find the best version of icon
+            quality.eachWithIndex { String q, int i ->
+                if (file.absolutePath.contains(q)) {
+
+                    logger.debug("Found icon ${f.absolutePath}")
+
+                    if (currQual > i) {
+                        bestQual = f.absolutePath.toString()
+                        currQual = i
+                    }
+                }
+            }
         }
 
-        f = new File(resDir, "drawable-xhdpi-v4/${baseName}.png")
-        if (f.exists()) {
-            return f.absolutePath.toString()
-        }
-
-        f = new File(resDir, "drawable-hdpi-v4/${baseName}.png")
-        if (f.exists()) {
-            return f.absolutePath.toString()
-        }
-
-        f = new File(resDir, "drawable-mdpi-v4/${baseName}.png")
-        if (f.exists()) {
-            return f.absolutePath.toString()
-        }
-
-        f = new File(resDir, "drawable/${baseName}.png")
-        if (f.exists()) {
-            return f.absolutePath.toString()
-        }
-
-        return ""
+        return bestQual
     }
 
-    private static String findName(String name, String resDir)
+    /**
+     * Looking for application name
+     *
+     * @param name
+     * @param resDir
+     * @return
+     */
+    private static String findName(String name, String resDir, Logger logger)
     {
         if (!name.startsWith("@string")) {
             return name
@@ -153,10 +157,11 @@ class TracepotPlugin implements Plugin<Project>
 
         def baseName = name.split("/")[1]
 
-        println baseName
+        logger.debug("Name string ${baseName}")
 
-        File f = new File(resDir, "values/values.xml")
+        File f = new File(resDir, "values${File.separatorChar}values.xml")
         if (!f.exists()) {
+            logger.warn("values.xml file not found")
             return ""
         }
 
@@ -170,34 +175,41 @@ class TracepotPlugin implements Plugin<Project>
      *
      * @param extension
      * @param mappingFilename
+     * @param appName
+     * @param iconFilename
+     * @param packageName
      */
-    private void uploadMappingFile(TracepotExtension extension, String mappingFilename)
+    private static void upload(TracepotExtension extension, String mappingFilename, String iconFilename,
+                        String appName, String packageName)
     {
-        String apiEndpoint = extension.getApiEndpoint()
-        String url = "${apiEndpoint}/api/upload-mapping"
+        String url = "${extension.getApiEndpoint()}/api/1/app"
 
-        MultipartEntity entity = buildEntity(extension)
+        DefaultHttpClient httpClient = buildHttpClient()
+        HttpPost                post = new HttpPost(url)
+        MultipartEntity       entity = new MultipartEntity()
 
-        entity.addPart('mapping_file', new FileBody(new File(mappingFilename)))
+        entity.addPart('api_group key', new StringBody(extension.getApiGroupKey()))
+        entity.addPart('package_name',  new StringBody(packageName))
+        entity.addPart('app_name',      new StringBody(appName))
 
-        post(url, entity)
-    }
+        if (!mappingFilename.empty) {
+            entity.addPart('mapping_file', new FileBody(new File(mappingFilename)))
+        }
 
-    /**
-     * Build MultipartEntity with common values
-     *
-     * @param extension
-     * @return MultipartEntity
-     */
-    private MultipartEntity buildEntity(TracepotExtension extension)
-    {
-        MultipartEntity entity = new MultipartEntity()
+        if (!iconFilename.empty) {
+            entity.addPart('icon_file', new FileBody(new File(iconFilename)))
+        }
 
-        entity.addPart('api_key',      new StringBody(extension.getApiKey()))
-        entity.addPart('group_id',     new StringBody(extension.getGroupId()))
-        entity.addPart('package_name', new StringBody(package_name))
+        post.addHeader("User-Agent", "Tracepot Gradle Plugin")
+        post.setEntity(entity)
 
-        return entity
+        HttpResponse response = httpClient.execute(post)
+
+        int code = response.getStatusLine().getStatusCode();
+
+        if (code != HttpStatus.SC_OK) {
+            throw new GradleException("API request failed with code " + code)
+        }
     }
 
     /**
@@ -209,7 +221,6 @@ class TracepotPlugin implements Plugin<Project>
     {
         DefaultHttpClient httpClient = new DefaultHttpClient()
 
-        // configure proxy (patched by timothy-volvo, https://github.com/timothy-volvo/testfairy-gradle-plugin)
         def proxyHost = System.getProperty("http.proxyHost")
 
         if (proxyHost != null) {
@@ -230,29 +241,5 @@ class TracepotPlugin implements Plugin<Project>
 
         return httpClient
     }
-
-    /**
-     * Post data to API endpoint
-     *
-     * @param url
-     * @param entity
-     */
-    private static void post(String url, MultipartEntity entity)
-    {
-        DefaultHttpClient httpClient = buildHttpClient()
-        HttpPost                post = new HttpPost(url)
-
-        post.addHeader("User-Agent", "Tracepot Gradle Plugin")
-        post.setEntity(entity)
-
-        HttpResponse response = httpClient.execute(post)
-
-        int code = response.getStatusLine().getStatusCode();
-
-        if (code != HttpStatus.SC_MOVED_TEMPORARILY) {
-            throw new GradleException("API request failed with code " + code)
-        }
-    }
-
 
 }
