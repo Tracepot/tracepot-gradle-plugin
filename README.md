@@ -10,7 +10,7 @@ A typical Tracepot Gradle Plugin installation takes less than 20 seconds. Instal
 
  1. Add the Tracepot Maven repository:
 
-        maven { url 'https://www.tracepot.com/maven' }
+        maven { url 'http://www.tracepot.com/maven' }
     
  2. Add plugin dependency: 
 
@@ -39,7 +39,7 @@ For convenience, here is a snippet of a complete ***build.gradle*** file, includ
     buildscript {
         repositories {
             jcenter()
-            maven { url 'https://www.tracepot.com/maven' }
+            maven { url 'http://www.tracepot.com/maven' }
         }
     
         dependencies {
