@@ -18,6 +18,7 @@ import org.gradle.api.GradleException
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.logging.Logger
+import java.util.regex.Pattern
 
 class TracepotPlugin implements Plugin<Project>
 {
@@ -59,11 +60,11 @@ class TracepotPlugin implements Plugin<Project>
                     def manifestFile = variant.outputs.processManifest.manifestOutputFile
                     def manifest     = new XmlSlurper().parse(manifestFile.get(0))
 
-                    String iconRes = manifest.application.'@android:icon'   //@drawable/ic_launcher
+                    String iconRes = manifest.application.'@android:icon'   //@drawable/ic_launcher || @mipmap/ic_launcher
                     String nameRes = manifest.application.'@android:label'  //@string/app_name  || app name
                     String resDir  = variant.outputs.processResources.resDir.get(0)
 
-                    project.logger.debug("Resource dir ${resDir}")
+                    project.logger.info("Resource dir ${resDir}")
 
                     def iconFilename = findIcon(iconRes, resDir, project.logger)
                     project.logger.info("Using icon ${iconFilename}")
@@ -102,22 +103,29 @@ class TracepotPlugin implements Plugin<Project>
      */
     private static String findIcon(String icon, String resDir, Logger logger)
     {
+        if (!icon.startsWith("@drawable") && !icon.startsWith("@mipmap")) {
+            return icon
+        }
+
+        def iconType = icon.split("/")[0].substring(1)
         def baseName = icon.split("/")[1]
         def bestQual = ""
         def currQual = 999
         def quality  = "mdpi hdpi xhdpi xxhdpi xxxhdpi".split()
 
-        logger.debug("Icon drawable ${baseName}")
+        logger.info("Icon ${iconType} ${baseName}")
 
         File dir = new File(resDir)
+
+        def osSeparator = Pattern.quote(File.separator)
 
         dir.listFiles().each { File file ->
 
             // get last part of the path
-            def dirName = (file.absolutePath.split(File.separator)).last()
+            def dirName = (file.absolutePath.split(osSeparator)).last()
 
             // we want only drawables
-            if (!dirName.startsWith("drawable")) {
+            if (!dirName.startsWith(iconType)) {
                 return
             }
 
@@ -159,7 +167,7 @@ class TracepotPlugin implements Plugin<Project>
 
         def baseName = name.split("/")[1]
 
-        logger.debug("Name string ${baseName}")
+        logger.info("Name string ${baseName}")
 
         File f = new File(resDir, "values${File.separatorChar}values.xml")
         if (!f.exists()) {
