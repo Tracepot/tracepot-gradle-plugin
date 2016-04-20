@@ -43,7 +43,7 @@ For convenience, here is a snippet of a complete ***build.gradle*** file, includ
         }
     
         dependencies {
-            classpath 'com.android.tools.build:gradle:1.0.0'
+            classpath 'com.android.tools.build:gradle:2.0.0'
             classpath 'com.tracepot.plugins.gradle:tracepot:1.+'
         }
     }

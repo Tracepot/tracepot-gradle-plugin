@@ -76,8 +76,7 @@ class TracepotPlugin implements Plugin<Project>
                     println "  Successfully uploaded to Tracepot"
                 }
 
-                newTask.dependsOn variant.dex
-                variant.assemble.dependsOn newTaskName
+                variant.assemble.dependsOn newTask
             }
         }
     }
