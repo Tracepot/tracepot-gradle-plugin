@@ -2,18 +2,19 @@ apply plugin: 'groovy'
 apply plugin: 'maven'
 
 group = 'com.tracepot.plugins.gradle'
-version = '1.0.3'
+version = '3.0.0'
 
 dependencies {
     repositories {
-        mavenCentral()
+        jcenter()
+        google()
     }
 
     compile gradleApi()
     compile localGroovy()
     compile 'org.apache.httpcomponents:httpmime:4.2.5'
     compile 'commons-io:commons-io:1.3.2'
-    compile 'com.android.tools.build:gradle:2.0.0'
+    compile 'com.android.tools.build:gradle:3.0.0'
 }
 
 configurations {

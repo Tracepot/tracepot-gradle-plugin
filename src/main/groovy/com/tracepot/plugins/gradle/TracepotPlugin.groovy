@@ -38,42 +38,53 @@ class TracepotPlugin implements Plugin<Project>
 
                 // check if this variant is enabled
                 if (!extension.enabledFor.contains(variantName)) {
-                    return;
+                    return
                 }
 
                 def packageName = variant.applicationId
                 def newTaskName = "tracepot${variantName.capitalize()}"
 
-                def newTask = project.task(newTaskName) << {
-                    assertValidApiKey  extension
+                def newTask = project.task(newTaskName) {
+                    doLast {
+                        assertValidApiKey  extension
 
-                    def mappingFilename = ""
+                        def mappingFilename = ""
 
-                    if (variant.buildType.isMinifyEnabled()) {
-                        project.logger.debug("Minify is enabled")
+                        if (variant.buildType.isMinifyEnabled()) {
+                            project.logger.debug("Minify is enabled")
 
-                        mappingFilename = variant.getMappingFile().toString()
+                            mappingFilename = variant.getMappingFile().toString()
 
-                        project.logger.info("Using mapping ${mappingFilename}")
+                            project.logger.info("Using mapping ${mappingFilename}")
+                        }
+
+                        def variantOutput = variant.outputs.first()
+
+                        def manifestFile
+                        try {
+                            // Android Gradle Plugin < 3.0.0
+                            manifestFile = variantOutput.processManifest.manifestOutputFile
+                        } catch (Exception ignored) {
+                            // Android Gradle Plugin >= 3.0.0
+                            manifestFile = new File(variantOutput.processManifest.manifestOutputDirectory, "AndroidManifest.xml")
+                        }
+
+                        def manifest = new XmlSlurper().parse(manifestFile)
+
+                        String iconRes = manifest.application.'@android:icon'   //@drawable/ic_launcher || @mipmap/ic_launcher
+                        String nameRes = manifest.application.'@android:label'  //@string/app_name  || app name
+                        String resDir  = variantOutput.processResources.inputResourcesDir.first().absolutePath
+                        project.logger.info("Resource dir ${resDir}")
+
+                        def iconFilename = findIcon(iconRes, resDir, project.logger)
+                        project.logger.info("Using icon ${iconFilename}")
+
+                        def appName = findName(nameRes, resDir, project.logger)
+                        project.logger.info("Using name ${appName}")
+
+                        upload(extension, mappingFilename, iconFilename, appName, packageName, variant.versionCode)
+                        println "  Successfully uploaded to Tracepot"
                     }
-
-                    def manifestFile = variant.outputs.processManifest.manifestOutputFile
-                    def manifest     = new XmlSlurper().parse(manifestFile.get(0))
-
-                    String iconRes = manifest.application.'@android:icon'   //@drawable/ic_launcher || @mipmap/ic_launcher
-                    String nameRes = manifest.application.'@android:label'  //@string/app_name  || app name
-                    String resDir  = variant.outputs.processResources.resDir.get(0)
-
-                    project.logger.info("Resource dir ${resDir}")
-
-                    def iconFilename = findIcon(iconRes, resDir, project.logger)
-                    project.logger.info("Using icon ${iconFilename}")
-
-                    def appName = findName(nameRes, resDir, project.logger)
-                    project.logger.info("Using name ${appName}")
-
-                    upload(extension, mappingFilename, iconFilename, appName, packageName, variant.versionCode)
-                    println "  Successfully uploaded to Tracepot"
                 }
 
                 variant.assemble.dependsOn newTask

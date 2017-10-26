@@ -14,7 +14,7 @@ A typical Tracepot Gradle Plugin installation takes less than 20 seconds. Instal
     
  2. Add plugin dependency: 
 
-        classpath 'com.tracepot.plugins.gradle:tracepot:1.+'
+        classpath 'com.tracepot.plugins.gradle:tracepot:3.+'
 
  3. Apply plugin:
 
@@ -43,8 +43,8 @@ For convenience, here is a snippet of a complete ***build.gradle*** file, includ
         }
     
         dependencies {
-            classpath 'com.android.tools.build:gradle:2.0.0'
-            classpath 'com.tracepot.plugins.gradle:tracepot:1.+'
+            classpath 'com.android.tools.build:gradle:3.0.0'
+            classpath 'com.tracepot.plugins.gradle:tracepot:3.+'
         }
     }
     
@@ -57,6 +57,15 @@ For convenience, here is a snippet of a complete ***build.gradle*** file, includ
             enabledFor "release"
         }
     }
+
+Android Studio 3
+----------------
+
+Android Studio 3 comes with Android Plugin for Gradle 3.0 which enables AAPT2 by default. With AAPT2 enabled this plugin will be able to upload only proguard mapping file without application name and icon. To upload name, icon and mapping file you need to disable AAPT2.
+
+To disable AAPT2 add this to your ***gradle.properties*** file:
+
+    android.enableAapt2=false
 
 
 Usage
